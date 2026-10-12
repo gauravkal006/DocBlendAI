@@ -1,0 +1,163 @@
+"""Module 2 — OCR path (scanned/printed PDFs and images).
+
+Responsibility: rasterize pages and run pytesseract, returning page text plus
+a confidence (0-1) as raw_conf for Module 3. raw_conf is the mean of
+Tesseract's word confidences, weighted by word length, so it tracks the share
+of characters recognized confidently.
+
+Uses from schemas.py: nothing directly; output feeds chunker.py -> RecognizedChunk.
+Requires the Tesseract binary on the system (see PROJECT_NOTES.md).
+"""
+
+import logging
+import shutil
+from contextlib import closing
+from functools import lru_cache
+from pathlib import Path
+
+import pytesseract
+from PIL import Image
+
+from app.config import settings
+from app.modules.pdf_render import denoise, render_pages
+
+logger = logging.getLogger(__name__)
+
+# The UB Mannheim Windows installer's default location (not added to PATH by default).
+_WINDOWS_DEFAULT = Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
+# A clean page OCRs in 1-3 s. A page Tesseract is still chewing on after this is
+# extreme noise, and reading it as unreadable beats blocking the upload for minutes.
+OCR_TIMEOUT_SECONDS = 30
+
+
+class OCRUnavailableError(RuntimeError):
+    """The Tesseract binary could not be found."""
+
+
+@lru_cache
+def _tesseract_cmd(configured: str) -> str:
+    for candidate in (configured, shutil.which("tesseract"), str(_WINDOWS_DEFAULT)):
+        if candidate and Path(candidate).is_file():
+            return candidate
+    raise OCRUnavailableError(
+        "Tesseract is not installed. Install it (Windows: winget install UB-Mannheim.TesseractOCR) "
+        "or set TESSERACT_CMD in .env to the full path of tesseract.exe."
+    )
+
+
+def ocr_image(image: Image.Image, lines_out: list | None = None) -> tuple[str, float]:
+    """OCR one page image. Returns (text, raw_conf); a page with no words gives ("", 0.0).
+
+    If lines_out is a list, one {"text", "conf", "box"} dict per text line is appended,
+    box = [x0, y0, x1, y1] as fractions of the image size (for the document viewer).
+    """
+    pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd(settings.tesseract_cmd)
+    try:
+        data = pytesseract.image_to_data(
+            denoise(image), output_type=pytesseract.Output.DICT, timeout=OCR_TIMEOUT_SECONDS
+        )
+    except RuntimeError as e:  # pytesseract raises RuntimeError("Tesseract process timeout")
+        if "timeout" not in str(e).lower():
+            raise
+        logger.warning("OCR gave up on a page after %ss; treating it as unreadable", OCR_TIMEOUT_SECONDS)
+        return "", 0.0
+
+    # Rebuild text from word boxes: words on the same line joined by spaces,
+    # lines by newlines, paragraphs by a blank line. conf == -1 marks non-word boxes.
+    lines: dict[tuple[int, int, int], list[str]] = {}
+    # Per line: [weighted conf, chars, x0, y0, x1, y1] for the viewer's boxes.
+    stats: dict[tuple[int, int, int], list[float]] = {}
+    weighted, chars = 0.0, 0
+    n = len(data["text"])
+    boxes = zip(*(data.get(k, [0] * n) for k in ("left", "top", "width", "height")))
+    for word, conf, block, par, line, (left, top, width, height) in zip(
+        data["text"], data["conf"], data["block_num"], data["par_num"], data["line_num"], boxes
+    ):
+        word = word.strip()
+        if not word or float(conf) < 0:
+            continue
+        key = (block, par, line)
+        lines.setdefault(key, []).append(word)
+        weighted += float(conf) / 100 * len(word)
+        chars += len(word)
+        s = stats.setdefault(key, [0.0, 0, left, top, left + width, top + height])
+        s[0] += float(conf) / 100 * len(word)
+        s[1] += len(word)
+        s[2], s[3] = min(s[2], left), min(s[3], top)
+        s[4], s[5] = max(s[4], left + width), max(s[5], top + height)
+
+    if not chars:
+        return "", 0.0
+
+    parts: list[str] = []
+    prev_par = None
+    w, h = image.size
+    for key, words in lines.items():  # dicts keep Tesseract's reading order
+        block, par, _ = key
+        if prev_par is not None and (block, par) != prev_par:
+            parts.append("")
+        parts.append(" ".join(words))
+        prev_par = (block, par)
+        if lines_out is not None:
+            s = stats[key]
+            box = [s[2] / w, s[3] / h, s[4] / w, s[5] / h]
+            lines_out.append({"text": " ".join(words), "conf": round(s[0] / s[1], 4), "box": [round(v, 5) for v in box]})
+    return "\n".join(parts), weighted / chars
+
+
+def _quick_conf(image: Image.Image) -> float:
+    """OCR confidence of a half-size copy: cheap enough to compare orientations."""
+    small = image.reduce(2) if max(image.size) > 1600 else image
+    return ocr_image(small)[1]
+
+
+def auto_orient(page: Image.Image) -> Image.Image:
+    """Turn a sideways or upside-down page upright.
+
+    Phone photos and scans often arrive rotated with no (or a wrong) EXIF tag,
+    and both OCR and HTR then read garbage. Tesseract's orientation detection
+    (OSD) proposes a rotation, but its confidence on short or handwritten pages
+    is low, so the proposal is verified: the page is OCRed as-is and rotated,
+    and the orientation that reads with higher confidence wins. Upright pages
+    (OSD says 0) cost one OSD call and nothing else.
+
+    Without Tesseract, or when OSD cannot decide (too little text), the page is
+    returned unchanged.
+    """
+    try:
+        pytesseract.pytesseract.tesseract_cmd = _tesseract_cmd(settings.tesseract_cmd)
+        osd = pytesseract.image_to_osd(page, output_type=pytesseract.Output.DICT, timeout=OCR_TIMEOUT_SECONDS)
+    except (OCRUnavailableError, pytesseract.TesseractError, RuntimeError):
+        return page
+    rotate = int(osd.get("rotate", 0)) % 360
+    if rotate == 0:
+        return page
+
+    # OSD's rotate direction is ambiguous across versions for 90/270, so try both turns.
+    candidates = [page, page.rotate(-rotate, expand=True)]
+    if rotate in (90, 270):
+        candidates.append(page.rotate(rotate, expand=True))
+    best = max(candidates, key=_quick_conf)
+    if best is not page:
+        logger.info("Page was rotated (OSD suggested %d degrees); turned it upright", rotate)
+    return best
+
+
+def ocr_file(file_path: str, max_pages: int | None = None, layout: list | None = None) -> list[tuple[str, float]]:
+    """Return (page_text, raw_conf) for each page of a PDF or image (or the first max_pages).
+
+    If layout is a list, one {"image", "lines"} record per page is appended for the viewer.
+    """
+    results = []
+    # closing(): if OCR fails mid-document, release the PDF now, not at garbage
+    # collection (Windows cannot delete a file that is still open).
+    with closing(render_pages(file_path, settings.ocr_dpi, max_pages)) as pages:
+        for img in pages:
+            img = auto_orient(img)
+            if layout is None:
+                results.append(ocr_image(img))
+            else:
+                lines: list = []
+                results.append(ocr_image(img, lines))
+                layout.append({"image": img, "lines": lines})
+    return results
