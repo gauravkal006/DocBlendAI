@@ -6,6 +6,7 @@ import { DocWindow, WindowChip, type Minimized, type WindowPlace } from "./compo
 import { ThemeToggle } from "./components/Keys";
 import { Library } from "./components/Library";
 import { Preview } from "./components/Preview";
+import { Project } from "./components/Project";
 import { Viewer } from "./components/Viewer";
 import { useIsPhone, useSlider, useTouch } from "./hooks";
 import type { Doc, PageSet } from "./types";
@@ -101,6 +102,8 @@ export default function App() {
   const previewDoc = docs.find((d) => d.doc_id === previewId) ?? null;
   const selectedIds = [...selected].filter((id) => names[id]);
   const tabs: [View, string, typeof Eye][] = [["docs", "Notes", FolderOpen], ["preview", "Preview", Eye], ["chat", "Ask", MessageCircle]];
+
+  if (location.pathname === "/copyright" || location.pathname === "/copyright/") return <Project />;
 
   return (
     <>

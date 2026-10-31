@@ -96,7 +96,6 @@ app.include_router(site_routes.router)
 # The web page's scripts and styles, built from frontend/ (npm run build). Their names carry a
 # content hash, so browsers may keep them for good.
 app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets", check_dir=False), name="assets")
-app.mount("/copyright", StaticFiles(directory=Path(__file__).resolve().parent.parent / "copyright_gui", html=True, check_dir=False), name="copyright")
 
 
 # async: answered on the event loop, so the host's health check gets a reply even while every
@@ -107,6 +106,8 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/", include_in_schema=False)
+@app.get("/copyright", include_in_schema=False)
+@app.get("/copyright/", include_in_schema=False)
 def frontend() -> FileResponse:
     """Demo UI: upload documents, ask questions, see reliability labels and sources."""
     # no-cache: browsers re-check on every visit, so a redeploy shows the new page at once.
