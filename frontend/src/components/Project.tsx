@@ -25,7 +25,10 @@ export function Project() {
             </button>
           ))}
         </div>
-        <a className="project-back" href="/"><ArrowLeft size={16} /> Open app</a>
+        <div className="project-actions">
+          <a className="project-back" href="/visualizations" target="_blank" rel="noreferrer">Visualizations</a>
+          <a className="project-back" href="/"><ArrowLeft size={16} /> Open app</a>
+        </div>
       </nav>
 
       <main className="project-main">

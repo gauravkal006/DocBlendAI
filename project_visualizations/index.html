@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DocBlendAI Visualization Gallery</title>
+  <style>
+    body { margin: 0; color: #202222; background: #fff; font-family: Georgia, "Times New Roman", serif; }
+    header { max-width: 1180px; margin: 0 auto; padding: 52px 32px 28px; border-bottom: 1px solid #b7c1bf; }
+    h1 { margin: 0; font-family: Arial, sans-serif; font-size: 38px; font-weight: 600; }
+    header p { max-width: 760px; margin-bottom: 0; color: #56635f; font-family: Arial, sans-serif; line-height: 1.6; }
+    main { max-width: 1180px; margin: 0 auto; padding: 24px 32px 60px; }
+    figure { margin: 0; padding: 28px 0 32px; border-bottom: 1px solid #d9dcdb; }
+    figure:last-child { border-bottom: 0; }
+    img { width: 100%; height: auto; display: block; border: 1px solid #e4e8e7; }
+    figcaption { margin-top: 14px; color: #56635f; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.55; }
+    figcaption b { color: #202222; }
+    @media (max-width: 800px) { header, main { padding-left: 20px; padding-right: 20px; } h1 { font-size: 30px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>DocBlendAI Data Visualizations</h1>
+    <p>The figures below are calculated from <code>evaluation/results/results.json</code> and <code>data/calibration.json</code>. The current evaluation dataset is synthetic and fixed-seed; real document performance should be reported separately.</p>
+  </header>
+  <main>
+    <figure><img src="screenshots/01-format-detection-matrix.png" alt="Format detection matrix"><figcaption><b>Format detection matrix</b> compares actual document formats with detected formats.</figcaption></figure>
+    <figure><img src="screenshots/02-extraction-error-rates.png" alt="Extraction error rates"><figcaption><b>Extraction quality</b> compares character and word error rates.</figcaption></figure>
+    <figure><img src="screenshots/03-extraction-pipeline.png" alt="Extraction pipeline"><figcaption><b>Extraction pipeline</b> explains the route from uploaded file to structured text.</figcaption></figure>
+    <figure><img src="screenshots/04-confidence-calibration.png" alt="Confidence calibration curve"><figcaption><b>Confidence calibration</b> maps raw confidence to expected character accuracy.</figcaption></figure>
+    <figure><img src="screenshots/05-calibration-method.png" alt="Calibration method"><figcaption><b>Calibration method</b> explains the four calculation stages.</figcaption></figure>
+    <figure><img src="screenshots/06-answer-and-retrieval-metrics.png" alt="Answer metrics"><figcaption><b>Question answering metrics</b> compares answer correctness and retrieval hit rate.</figcaption></figure>
+  </main>
+</body>
+</html>

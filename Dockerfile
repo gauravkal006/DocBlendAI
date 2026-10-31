@@ -6,6 +6,13 @@
 # The default handwriting engine (PaddleOCR models via RapidOCR/ONNX Runtime) is
 # included. The optional TrOCR engine needs PyTorch (~1 GB more); add it with
 #   docker build --build-arg WITH_TROCR=true -t docblendai .
+FROM node:22-bookworm-slim AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.11-slim-bookworm
 
 ARG WITH_TROCR=false
@@ -44,8 +51,10 @@ RUN grep -vE '^(torch|torchvision|transformers|huggingface_hub|sentencepiece|jiw
 RUN python -c "from rapid_table import ModelType, RapidTable, RapidTableInput; RapidTable(RapidTableInput(model_type=ModelType.SLANETPLUS, use_ocr=False))"
 
 COPY app ./app
+COPY --from=frontend-builder /app/static ./app/static
 COPY data/calibration.json ./data/calibration.json
 COPY copyright_gui ./copyright_gui
+COPY project_visualizations ./project_visualizations
 
 # Runtime data (database, vectors, uploads) lives in /data: mount a volume there
 # so documents survive container restarts. Calibration stays in the image.
