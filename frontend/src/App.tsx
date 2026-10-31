@@ -111,6 +111,7 @@ export default function App() {
             <span className="brand__name">DocBlend<em>AI</em></span>
           </a>
           <p className="topbar__tag">Notes in, honest answers out.</p>
+          <a className="topbar__link" href="/copyright">Project</a>
           <ThemeToggle />
         </div>
       </header>

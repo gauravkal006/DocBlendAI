@@ -141,6 +141,8 @@ pre { margin: 0; }
 }
 .brand:hover .coin { transform: rotate(-10deg) translateY(-1px); }
 .topbar__tag { margin-left: 6px; padding-left: 16px; border-left: 1px solid var(--line); color: var(--muted); font-size: 0.9rem; flex: 1; }
+.topbar__link { color: var(--ink); font-size: 0.88rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+.topbar__link:hover { color: var(--accent); }
 .banner { max-width: 1640px; margin: 12px auto 0; padding: 10px 16px; color: var(--danger); }
 
 /* ---------- board: library · preview · chat ---------- */
